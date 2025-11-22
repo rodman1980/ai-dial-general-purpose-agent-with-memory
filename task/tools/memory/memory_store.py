@@ -42,7 +42,7 @@ class LongTermMemoryStore:
 
     async def _load_memories(self, api_key: str) -> MemoryCollection:
         #TODO:
-        # 1. Create AsyncDial client
+        # 1. Create AsyncDial client (api_version is 2025-01-01-preview)
         # 2. Get memory file path
         # 3. Check cache: cache is dict of str and MemoryCollection, for the key we will use `memory file path` to make
         #    it simple. Such key will be unique for user and will allow to access memories across different
