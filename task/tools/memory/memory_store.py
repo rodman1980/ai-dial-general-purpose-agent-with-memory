@@ -37,7 +37,7 @@ class LongTermMemoryStore:
         return f"files/{(user_home / '__long-memories/data.json').as_posix()}"
 
     async def _load_memories(self, api_key: str) -> MemoryCollection:
-        dial_client = AsyncDial(base_url=self.endpoint, api_key=api_key)
+        dial_client = AsyncDial(base_url=self.endpoint, api_key=api_key, api_version='2025-01-01-preview')
         file_path = await self._get_memory_file_path(dial_client)
 
         if file_path in self._cache:
