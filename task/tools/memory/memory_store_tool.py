@@ -1,3 +1,15 @@
+"""
+Tool for storing new long-term memories about the user.
+
+Execution flow:
+1. LLM calls this tool when it detects important user information worth remembering
+2. Tool parses JSON arguments (content, category, importance, topics)
+3. Delegates to LongTermMemoryStore.add_memory() for persistence
+4. Reports success/failure to the conversation stage
+
+Side effects: Creates/updates memory file in user's DIAL bucket
+"""
+
 import json
 from typing import Any
 
@@ -19,36 +31,99 @@ class StoreMemoryTool(BaseTool):
     """
 
     def __init__(self, memory_store: LongTermMemoryStore):
+        """
+        Args:
+            memory_store: Shared backend instance for memory operations
+        """
         self.memory_store = memory_store
 
     @property
     def name(self) -> str:
-        # TODO: provide self-descriptive name
-        raise NotImplementedError()
+        """Unique identifier used by LLM to invoke this tool."""
+        return "store_memory"
 
     @property
     def description(self) -> str:
-        # TODO: provide tool description that will help LLM to understand when to use this tools and cover 'tricky'
-        #  moments (not more 1024 chars)
-        raise NotImplementedError()
+        """
+        Description guiding LLM on when/how to use this tool.
+        
+        Note: Must be <1024 chars. Emphasizes proactive storage of novel facts.
+        """
+        return (
+            "Store important information about the user in long-term memory. "
+            "Use this tool PROACTIVELY when the user shares: personal details (name, location, job), "
+            "preferences (favorite language, tools, food), goals, plans, or any fact worth remembering. "
+            "Do NOT ask permission - store automatically when you detect novel, useful information. "
+            "Store ONE fact per call. Be specific and concise in content."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
-        # TODO: provide tool parameters JSON Schema:
-        #  - content is string, description: "The memory content to store. Should be a clear, concise fact about the user.", required
-        #  - category is string, description: "Category of the info (e.g., 'preferences', 'personal_info', 'goals', 'plans', 'context')", default is 'general' required
-        #  - importance is number, description: "Importance score between 0 and 1. Higher means more important to remember.", minimum is 0, maximum is 1, default is 0.5
-        #  - topics is array of strings, description: "Related topics or tags for the memory", default is empty array
-        raise NotImplementedError()
+        """
+        JSON Schema for tool arguments.
+        
+        Required: content, category
+        Optional: importance (default 0.5), topics (default [])
+        """
+        return {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "The memory content to store. Should be a clear, concise fact about the user."
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Category of the info (e.g., 'preferences', 'personal_info', 'goals', 'plans', 'context')",
+                    "default": "general"
+                },
+                "importance": {
+                    "type": "number",
+                    "description": "Importance score between 0 and 1. Higher means more important to remember.",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "default": 0.5
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related topics or tags for the memory",
+                    "default": []
+                }
+            },
+            "required": ["content", "category"]
+        }
 
     async def _execute(self, tool_call_params: ToolCallParams) -> str:
-        #TODO:
-        # 1. Load arguments with `json`
-        # 2. Get `content` from arguments
-        # 3. Get `category` from arguments
-        # 4. Get `importance` from arguments, default is 0.5
-        # 5. Get `topics` from arguments, default is empty array
-        # 6. Call `memory_store` `add_memory` (we will implement logic in `memory_store` later)
-        # 7. Add result to stage
-        # 8. Return result
-        raise NotImplementedError()
+        """
+        Parse arguments and delegate to memory store.
+        
+        Args:
+            tool_call_params: Contains tool_call.function.arguments (JSON string),
+                              stage for UI feedback, api_key for DIAL auth
+        
+        Returns:
+            Success/failure message
+        """
+        # Parse JSON arguments from LLM tool call
+        args = json.loads(tool_call_params.tool_call.function.arguments)
+        
+        # Extract required and optional parameters
+        content = args["content"]
+        category = args.get("category", "general")
+        importance = args.get("importance", 0.5)
+        topics = args.get("topics", [])
+        
+        # Delegate to memory store backend
+        result = await self.memory_store.add_memory(
+            api_key=tool_call_params.api_key,
+            content=content,
+            importance=importance,
+            category=category,
+            topics=topics
+        )
+        
+        # Update UI stage with result
+        tool_call_params.stage.append_content(result)
+        
+        return result
